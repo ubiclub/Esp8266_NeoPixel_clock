@@ -12,12 +12,14 @@ const int DIO = D3; //Set the DIO pin connection to the display
 const int VCC = D4; //Set the VCC pin connection to the display
 TM1637Display display(CLK, DIO); //set up the 4-Digit Display.
 
-#define NUMPIXELS      24       // number of NeoPixel LEDs
-#define PIN            D5        // digital pin on ESP8266 for the NeoPixel data line
-#define mirror_hands   false     // In case the NeoPixel ring is wired ant-clockwise. 
+#define NUMPIXELS     24       // number of NeoPixel LEDs
+#define PINGND        D0
+#define PINVCC        D5
+#define PIN           D6        // digital pin on ESP8266 for the NeoPixel data line
+#define mirror_hands  false     // In case the NeoPixel ring is wired ant-clockwise. 
 
 byte hour_hand, minute_hand, second_hand, previous_second;
-byte ring_offset = 6;               // Adjument ring start position
+byte ring_offset = 6;               // Adjument ring start position (7 or 5)
 byte blink_sec = 0;
 
 Adafruit_NeoPixel pixels = Adafruit_NeoPixel(NUMPIXELS, PIN, NEO_GRB + NEO_KHZ800);
@@ -29,14 +31,19 @@ void clearHands() {
   }
 }
 
+int cal_hour_hand(int h)
+{
+  return (h * NUMPIXELS / 12  + minute() * NUMPIXELS / 12 / 60 + ring_offset) % NUMPIXELS;
+}
+
 void drawHands(){
   clearHands();
-  
-  pixels.setPixelColor(0,pixels.Color(0,0,100));
-  pixels.setPixelColor(6,pixels.Color(0,0,100));
-  pixels.setPixelColor(12,pixels.Color(0,0,100));
-  pixels.setPixelColor(18,pixels.Color(0,0,100));
 
+  // show blue pixel on 0,3,6,9 position
+  for(int i=0; i<12; i++){
+    pixels.setPixelColor((i * NUMPIXELS / 12 + ring_offset) % NUMPIXELS, pixels.Color(i%3?0:20,0,20));
+  }
+  
   pixels.setPixelColor(hour_hand,pixels.Color(100,0,0));
   // if hour and minute are the same led, use a different color to show that
   if (hour_hand==minute_hand) {
@@ -63,28 +70,27 @@ void setup() {
   WiFiManager wifiManager; // wifi configuration wizard
   wifiManager.autoConnect("NeoPixel_Clock2", "secret"); // configuration for the access point, set your own secret. 
   Serial.println("WiFi Client connected!)");
-  NTP.begin("es.pool.ntp.org", 9, true); // get time from NTP server pool.
+  NTP.begin("pool.ntp.org", 9, false); // get time from NTP server pool.
   NTP.setInterval(63);
   pixels.begin();
   pixels.setBrightness(254);
 
+  // power of TM1637Display
   pinMode(VCC, OUTPUT);
   digitalWrite(VCC, HIGH);
   display.setBrightness(0x04); //set the diplay to 0..7 brightness
 
+  // Power of NeoPixel LEDs
+  pinMode(PINVCC, OUTPUT);
+  digitalWrite(PINVCC, HIGH);
+  pinMode(PINGND, OUTPUT);
+  digitalWrite(PINGND, LOW);
 }
 
 void loop() {
   
   minute_hand = (minute() * NUMPIXELS / 60 + ring_offset) % NUMPIXELS;
-  
-  if (hour() >= 12) {
-    hour_hand = (((hour() - 12) * NUMPIXELS / 12) + (minute() *2 / 60) + ring_offset) % NUMPIXELS;
-  }
-  else {
-    hour_hand = ((hour() * NUMPIXELS / 12) + (minute() *2 / 60) + ring_offset) % NUMPIXELS;
-  }
-   
+  hour_hand = cal_hour_hand(hour());
   second_hand = (second() * NUMPIXELS / 60 + ring_offset) % NUMPIXELS;
 
   if (mirror_hands) {
@@ -97,9 +103,7 @@ void loop() {
   if (second_hand!=previous_second) {
     previous_second=second_hand;
     // drawHands();
+    display.showNumberDecEx(hour() * 100 + minute(), 0x40); //Display the numCounter value;
   }
   delay(490);
-  
-  display.showNumberDecEx(hour() * 100 + minute(), 0x40); //Display the numCounter value;
-
 }
