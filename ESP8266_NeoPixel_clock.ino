@@ -1,8 +1,5 @@
 
 #include <NtpClientLib.h>
-#include <ESP8266WiFi.h>          
-#include <DNSServer.h>            
-#include <ESP8266WebServer.h>     
 #include <WiFiManager.h>          //https://github.com/tzapu/WiFiManager WiFi Configuration Magic
 #include <Adafruit_NeoPixel.h>
 #include <TM1637Display.h>
@@ -10,6 +7,8 @@
 const int CLK = D2; //Set the CLK pin connection to the display
 const int DIO = D3; //Set the DIO pin connection to the display
 const int VCC = D4; //Set the VCC pin connection to the display
+const int BTN = D5; // Button to set brightless
+
 TM1637Display display(CLK, DIO); //set up the 4-Digit Display.
 
 #define NUMPIXELS     24       // number of NeoPixel LEDs
@@ -21,6 +20,7 @@ TM1637Display display(CLK, DIO); //set up the 4-Digit Display.
 byte hour_hand, minute_hand, second_hand, previous_second;
 byte ring_offset = 6;               // Adjument ring start position (7 or 5)
 byte blink_sec = 0;
+int  brightness = 254; // 0-255
 
 Adafruit_NeoPixel pixels = Adafruit_NeoPixel(NUMPIXELS, PIN, NEO_GRB + NEO_KHZ800);
 
@@ -72,8 +72,6 @@ void setup() {
   Serial.println("WiFi Client connected!)");
   NTP.begin("pool.ntp.org", 9, false); // get time from NTP server pool.
   NTP.setInterval(63);
-  pixels.begin();
-  pixels.setBrightness(254);
 
   // power of TM1637Display
   pinMode(VCC, OUTPUT);
@@ -85,9 +83,21 @@ void setup() {
   digitalWrite(PINVCC, HIGH);
   pinMode(PINGND, OUTPUT);
   digitalWrite(PINGND, LOW);
+
+  pixels.begin();
+  pixels.setBrightness(254);
+
+  pinMode(BTN, INPUT_PULLUP);
 }
 
 void loop() {
+
+  boolean btnoressed = !digitalRead(BTN);
+  if (btnoressed) {
+    brightness = (brightness + 32) % 256;
+    pixels.setBrightness(brightness);
+    display.showNumberDecEx(brightness, 0x40); //Display the numCounter value;
+  }
   
   minute_hand = (minute() * NUMPIXELS / 60 + ring_offset) % NUMPIXELS;
   hour_hand = cal_hour_hand(hour());
